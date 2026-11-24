@@ -26,10 +26,13 @@ Expected: `23 passed, 0 failed`.
 ## 2. Static export + served instance
 
 ```bash
-npm run build                       # → ./out
-npm run serve                       # http://localhost:3000
+npm run build:docs                  # → out/ + docs/app (portable build)
+npm run serve                       # http://localhost:3000 (serves ./out)
 ./scripts/smoke-test.sh http://localhost:3000
+./scripts/smoke-test.sh             # checks ./out + docs/app without a server
 ```
+
+Offline check (no server at all): open `docs/app/index.html` or `index.html` straight from disk — the studio must load, render the sample preview, switch themes and download `index.html` with fonts embedded (that is the file:// path, `npm run build:offline` produces it).
 
 `scripts/smoke-test.sh` checks that:
 
@@ -119,8 +122,9 @@ Clean checkout, `npm ci`:
 
 ```
 npm run check                                    → 23 passed, 0 failed
-npm run build && npm run serve
-./scripts/smoke-test.sh http://localhost:3000     → 14 passed, 0 failed
+npm run build:docs
+./scripts/smoke-test.sh                           → 17 passed, 0 failed
+./scripts/smoke-test.sh http://localhost:3000     → 21 passed, 0 failed
 ```
 
 If a render assertion fails, the stack trace will point at `lib/render.js` / `lib/markdown.js` — both are pure functions with no external state. A stale build is the usual culprit: `rm -rf .next out && npm run build`.

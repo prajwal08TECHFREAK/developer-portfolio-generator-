@@ -23,58 +23,42 @@ Aurora · Terminal · Editorial · Minimal · Neon Grid · Sunset Card — full-
 ## Quick start
 
 ```bash
+open index.html     # prebuilt app, works offline straight from the folder
 npm install
-npm run dev        # http://localhost:3000 — dev server with hot reload
+npm run dev         # dev server → http://localhost:3000
 ```
 
-Production / static build:
-
-```bash
-npm run build      # static site → ./out   (no Node runtime needed)
-npm run serve      # serve ./out on http://localhost:3000
-```
-
-Node 18+. Zero environment variables, zero backend, no database.
-
-`npm run check` runs the parser/renderer/export test suite offline (23 assertions).
+Node 18+ for development only. Zero environment variables, zero backend, no database.
 
 ---
 
-## Hosting the app itself on GitHub Pages
+## Open the app (no build step)
 
-The app is a static site, so it can live in the very same repo as the source.
+The zip already contains a **prebuilt copy of the app** — you do not have to run anything:
 
-**One-time setup**
+| What you want | Do this |
+| --- | --- |
+| Just use it | open **`index.html`** in the repo root (it forwards to `docs/app/`) — or open `docs/app/index.html` directly |
+| Host it on GitHub Pages | **Settings → Pages → Source: Deploy from a branch → `main` → `/docs`** → live at `https://<user>.github.io/<repo>/app/` |
+| Develop it | `npm install` then `npm run dev` → http://localhost:3000 |
 
-1. Push this repo to GitHub.
-2. **Settings → Pages → Source: GitHub Actions.**
-3. Every push to `main` runs `.github/workflows/deploy-app.yml`, which builds the export and publishes `./out`.
+`docs/app/` is a complete static build (relative asset paths), so it works from `file://`, from a zip, from a sub-folder, or from Pages — no rebuild required when it moves.
 
-Your studio is then live at `https://<user>.github.io/<repo>/` — put that link in the repo's *About → Website* field (or the badge below) so visitors land on the working app.
+Put the Pages link in the repo: **About → Website** → `https://<user>.github.io/<repo>/app/`.
 
-The workflow derives the correct Next.js `basePath` from the repository name (`<user>.github.io` → root, anything else → `/<repo>/`), so there is nothing to configure.
-
-**Prefer “Deploy from a branch → main → /docs”?**
-
-```bash
-npm run build:docs      # git origin is read, out/ is built with the right basePath, copied to docs/app
-git add docs/app && git commit -m "chore: build app for Pages" && git push
-```
-
-Then set **Settings → Pages → Source: Deploy from a branch → main → /docs**; the app is served from `…/<repo>/app/`.
-
-**Building by hand**
+## Rebuilding after changes
 
 ```bash
-BASE_PATH=/<repo> npm run build     # sub-path repo
-BASE_PATH= npm run build            # user site or custom domain
-npm run serve                       # local check of the export
-# ./out can go to GitHub Pages, Netlify, Vercel, Cloudflare Pages, S3 — anything static
+npm install
+npm run build:docs     # rebuilds the app into docs/app (relative paths, portable)
+npm run dev            # dev server with hot reload
+npm run serve          # serve the last build at http://localhost:3000
+npm run check          # offline parser/renderer/export tests (23 assertions)
 ```
 
-> Live app: `https://<user>.github.io/<repo>/` — replace after your first deploy.
+**Prefer Actions instead of the `docs` branch?** Flip **Settings → Pages → Source: GitHub Actions** and push — `.github/workflows/deploy-app.yml` builds and publishes the app at the repo root (`https://<user>.github.io/<repo>/`). Use one *or* the other, not both.
 
----
+**Any other host** (Netlify, Vercel, Cloudflare Pages, S3, …): publish the `docs/app` folder, or run `BASE_PATH=/<sub-path> npm run build` and publish `./out`.
 
 ## What it does
 
@@ -149,9 +133,12 @@ lib/
   github.js               browser-side GitHub publish flow
   publish-files.js        repo scaffolding (README, workflow, .nojekyll)
   options.js  sample.js   defaults + demo résumé
+docs/app/                 prebuilt, portable copy of the app (served by Pages, openable offline)
+index.html                tiny redirect at the repo root → docs/app/
 public/fonts/*.woff2      Inter, Newsreader, JetBrains Mono (inlined on export)
 scripts/check-export.mjs  offline parser/render/export tests  → npm run check
-scripts/build-docs-app.mjs builds ./out into docs/app for branch-based Pages
+scripts/build-docs-app.mjs builds docs/app (portable static copy shipped in the zip)
+scripts/make-offline-html.mjs turns the export into a file:// friendly build
 scripts/smoke-test.sh     checks ./out and optionally a served instance
 .github/workflows/deploy-app.yml   builds ./out → GitHub Pages
 examples/sample-resume.md          demo input
@@ -187,7 +174,7 @@ Manual UI and real-publish checklists: [TESTING.md](TESTING.md).
 - Avatars are URLs (GitHub raw, Gravatar, an image in the repo). No upload pipeline.
 - GitHub Pages needs a public repo on free plans; private repos need a paid plan (the app pushes the files and tells you).
 - Drafts, theme choices and section edits live in `localStorage`; **Reset** clears them.
-- Bundle: ~158 kB first load for the studio, 1.1 MB for the whole static export.
+- Bundle: ~158 kB first load for the studio, ~1.2 MB for the whole static export (fonts included).
 
 ## License
 

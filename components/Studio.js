@@ -128,7 +128,7 @@ function MiniSection({ section }) {
 /* Studio                                                              */
 /* ------------------------------------------------------------------ */
 
-export default function Studio({ initialSections }) {
+export default function Studio({ initialSections = [] }) {
   const [markdown, setMarkdown] = useState(SAMPLE_MD);
   const [options, setOptions] = useState({ ...DEFAULT_OPTIONS });
   const [tab, setTab] = useState('content');
@@ -153,11 +153,12 @@ export default function Studio({ initialSections }) {
     let alive = true;
     (async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        const prefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+        const base = prefix !== undefined ? prefix : process.env.NEXT_PUBLIC_BASE_PATH || '';
         const faces = await Promise.all(
           Object.values(FONT_FILES).map(async (f) => {
-            const res = await fetch(`${base}${f.file}`);
-            if (!res.ok) return '';
+            const res = await fetch(`${base}${f.file}`).catch(() => null);
+            if (!res || !res.ok) return '';
             const buf = await res.arrayBuffer();
             let bin = '';
             const bytes = new Uint8Array(buf);

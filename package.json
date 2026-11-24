@@ -4,11 +4,12 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "build:offline": "REL_ASSETS=1 next build && node scripts/make-offline-html.mjs",
+    "build:docs": "node scripts/build-docs-app.mjs",
     "serve": "npx --yes serve@14 out -l 3000",
-    "preview": "next build && npx --yes serve@14 out -l 3000",
+    "preview": "npm run build:offline && npm run serve",
     "check": "node scripts/check-export.mjs",
-    "lint": "next lint",
-    "build:docs": "node scripts/build-docs-app.mjs"
+    "lint": "next lint"
   },
   "keywords": [
     "markdown",

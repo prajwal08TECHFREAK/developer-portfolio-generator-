@@ -20,7 +20,7 @@ echo "Portfolio Forge — static build checks"
 
 head_ "1. Export output exists"
 if [ -d "$OUT" ]; then ok "./out present"; else bad "./out missing — run 'npm run build' first"; fi
-for f in index.html 404.html .nojekyll preview/index.html; do
+for f in index.html 404.html .nojekyll preview.html; do
   if [ -f "$OUT/$f" ]; then ok "$f"; else bad "$f missing"; fi
 done
 
@@ -29,12 +29,12 @@ node -e '
 const fs = require("fs");
 const path = require("path");
 const out = "out";
-const pages = ["index.html", "404.html", "preview/index.html"];
+const pages = ["index.html", "404.html", "preview.html"];
 let bad = 0;
 for (const p of pages) {
   const html = fs.readFileSync(path.join(out, p), "utf8");
-  const refs = [...html.matchAll(/(?:src|href)="(\/_next\/[^"]+)"/g)].map((m) => m[1]);
-  const missing = refs.filter((r) => !fs.existsSync(path.join(out, r.replace(/^\//, ""))));
+  const refs = [...html.matchAll(/(?:src|href)="(\.?\/?_next\/[^"]+)"/g)].map((m) => m[1]);
+  const missing = refs.filter((r) => !fs.existsSync(path.join(out, r.replace(/^\.?\//, ""))));
   if (!refs.length) { console.log("  \x1b[31m✗\x1b[0m " + p + " has no _next assets"); bad++; continue; }
   if (missing.length) { console.log("  \x1b[31m✗\x1b[0m " + p + " → missing " + missing.join(", ")); bad++; continue; }
   console.log("  \x1b[32m✓\x1b[0m " + p + " → " + refs.length + " assets resolve");
@@ -44,20 +44,27 @@ else console.log("  \x1b[32m✓\x1b[0m no server API references (fully static)")
 process.exit(bad ? 1 : 0);
 ' && PASS=$((PASS+2)) || FAIL=$((FAIL+1))
 
+head_ "2b. Prebuilt copy in docs/app"
+for f in docs/app/index.html docs/app/preview.html docs/app/.nojekyll docs/.nojekyll index.html; do
+  if [ -f "$f" ]; then ok "$f"; else bad "$f missing — run 'npm run build:docs'"; fi
+done
+if grep -q 'docs/app/index.html' index.html; then ok "root index.html redirects to the app"; else bad "root index.html redirect missing"; fi
+if grep -q '_next/_next' -r docs/app/index.html docs/app/preview.html 2>/dev/null; then bad "double _next/ prefix in docs/app"; else ok "no broken asset prefixes"; fi
+
 head_ "3. Build size"
 size=$(du -sk "$OUT" 2>/dev/null | awk '{print $1}')
 if [ "${size:-0}" -lt 8000 ]; then ok "export is ${size} KB (under 8 MB)"; else bad "export is ${size} KB — unexpectedly large"; fi
 
 if [ -n "$BASE" ]; then
   head_ "4. Served instance"
-  code=$(curl -s -o /tmp/pf_home.html -w "%{http_code}" "$BASE/")
+  code=$(curl -s -L -o /tmp/pf_home.html -w "%{http_code}" "$BASE/")
   [ "$code" = "200" ] && ok "GET / → 200" || bad "GET / → $code"
   grep -q "Portfolio Forge" /tmp/pf_home.html && ok "app shell served" || bad "app shell missing"
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/preview/")
-  [ "$code" = "200" ] && ok "GET /preview/ → 200" || bad "GET /preview/ → $code"
+  code=$(curl -s -L -o /dev/null -w "%{http_code}" "$BASE/preview.html")
+  [ "$code" = "200" ] && ok "GET /preview.html → 200" || bad "GET /preview.html → $code"
   js=$(grep -o '/_next/static/chunks/[^"]*\.js' /tmp/pf_home.html | head -1)
   if [ -n "$js" ]; then
-    code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE$js")
+    code=$(curl -s -L -o /dev/null -w "%{http_code}" "$BASE$js")
     [ "$code" = "200" ] && ok "JS chunk served ($js)" || bad "JS chunk → $code"
   fi
 fi
