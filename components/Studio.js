@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { THEMES } from '../lib/themes';
 import { DEFAULT_OPTIONS } from '../lib/options';
 import { mdToHtml } from '../lib/markdown-client';
-import { parseFrontMatter, splitSections, classify } from '../lib/markdown';
+import { parseFrontMatter, splitSections, classify, compilePortfolio } from '../lib/markdown.js';
+import { renderDocument } from '../lib/render.js';
+import { loadStudioFonts } from '../lib/fonts.js';
+import { FONT_FILES } from '../lib/themes.js';
+import { publishToGitHub, checkToken } from '../lib/github.js';
+import { exportFiles } from '../lib/publish-files';
 import { SAMPLE_MD } from '../lib/sample';
 
 const LS_KEY = 'portfolio-forge:v1';
@@ -28,6 +33,25 @@ const KIND_COLOR = {
   contact: 'text-rose-300',
   generic: 'text-slate-400',
 };
+
+/** Compile options: section order/hidden/renamed headings travel with the options. */
+function compile(markdown, options, sections) {
+  const overrides = options.sections || {};
+  return compilePortfolio(markdown, {
+    sectionOrder: sections ? sections.map((s) => s.id) : options.sectionOrder,
+    hidden: Object.fromEntries(Object.entries(overrides).map(([k, v]) => [k, !!(v && v.hidden)])),
+    titles: Object.fromEntries(Object.entries(overrides).map(([k, v]) => [k, (v && v.title) || ''])),
+  });
+}
+
+/** The publishable HTML document (used for the preview frame, export and publish). */
+function buildHtml(markdown, options, sections) {
+  return renderDocument(compile(markdown, options, sections), options);
+}
+
+function buildFiles(markdown, options, sections) {
+  return exportFiles({ html: buildHtml(markdown, options, sections), markdown, options });
+}
 
 /* ------------------------------------------------------------------ */
 /* mini rendered blocks for the inline preview                         */
@@ -122,6 +146,35 @@ export default function Studio({ initialSections }) {
   const fileRef = useRef(null);
   const iframeRef = useRef(null);
 
+  /* ---------- fonts (self-hosted, inlined on export) ---------- */
+  const [fontCss, setFontCss] = useState('');
+  useEffect(() => {
+    loadStudioFonts();
+    let alive = true;
+    (async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        const faces = await Promise.all(
+          Object.values(FONT_FILES).map(async (f) => {
+            const res = await fetch(`${base}${f.file}`);
+            if (!res.ok) return '';
+            const buf = await res.arrayBuffer();
+            let bin = '';
+            const bytes = new Uint8Array(buf);
+            for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+            return `@font-face{font-family:'${f.family}';font-style:normal;font-weight:${f.weight};font-display:swap;src:url(data:font/woff2;base64,${btoa(bin)}) format('woff2')}`;
+          })
+        );
+        if (alive) setFontCss(faces.filter(Boolean).join('\n'));
+      } catch {
+        /* fonts are a nicety: exported sites fall back to system stacks */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   /* ---------- persistence ---------- */
   useEffect(() => {
     try {
@@ -195,29 +248,15 @@ export default function Studio({ initialSections }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markdown, hydrated]);
 
-  /* ---------- preview html via server route ---------- */
-  const [html, setHtml] = useState('');
-  useEffect(() => {
-    if (!hydrated) return;
-    let cancelled = false;
-    const id = setTimeout(async () => {
-      try {
-        const res = await fetch('/api/render', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ markdown, options: { ...options, sectionOrder: sections.map((s) => s.id) } }),
-        });
-        if (!res.ok) throw new Error(`render failed (${res.status})`);
-        const text = await res.text();
-        if (!cancelled) setHtml(text);
-      } catch (err) {
-        if (!cancelled) flash(String(err.message || err), 'err');
-      }
-    }, 220);
-    return () => {
-      cancelled = true;
-      clearTimeout(id);
-    };
+  /* ---------- preview html (compiled in the browser) ---------- */
+  const html = useMemo(() => {
+    if (!hydrated) return '';
+    try {
+      return buildHtml(markdown, options, sections);
+    } catch (err) {
+      flash(String(err.message || err), 'err');
+      return '';
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markdown, options, sections, hydrated]);
 
@@ -231,13 +270,15 @@ export default function Studio({ initialSections }) {
   };
   useEffect(injectDownload, [previewSrc]);
 
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
   const openPreview = () => {
     sessionStorage.setItem('pf:html', html);
-    window.open('/preview', '_blank');
+    window.open(`${basePath}/preview/`, '_blank');
   };
 
   const downloadHtml = () => {
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([buildHtml(markdown, { ...options, fontCss }, sections)], { type: 'text/html' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'index.html';
@@ -249,15 +290,10 @@ export default function Studio({ initialSections }) {
   const downloadZip = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdown, options: { ...options, sectionOrder: sections.map((s) => s.id) } }),
-      });
-      const data = await res.json();
+      const files = buildFiles(markdown, { ...options, fontCss }, sections);
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      Object.entries(data.files || {}).forEach(([p, c]) => zip.file(p, c));
+      Object.entries(files).forEach(([path, content]) => zip.file(path, content));
       const blob = await zip.generateAsync({ type: 'blob' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -407,6 +443,7 @@ export default function Studio({ initialSections }) {
             )}
             {tab === 'publish' && (
               <PublishTab
+                fontCss={fontCss}
                 markdown={markdown}
                 options={options}
                 sections={sections}
@@ -862,7 +899,7 @@ function SectionsTab({ sections, options, set, setSection, move, profile }) {
   );
 }
 
-function PublishTab({ markdown, options, sections, deploy, setDeploy, flash, html }) {
+function PublishTab({ markdown, options, sections, deploy, setDeploy, flash, html, fontCss }) {
   const [token, setToken] = useState('');
   const [repo, setRepo] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -871,6 +908,7 @@ function PublishTab({ markdown, options, sections, deploy, setDeploy, flash, htm
   const [error, setError] = useState('');
   const [steps, setSteps] = useState([]);
   const [copied, setCopied] = useState('');
+  const [tokenInfo, setTokenInfo] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('pf:deploy-config');
@@ -893,38 +931,40 @@ function PublishTab({ markdown, options, sections, deploy, setDeploy, flash, htm
     setBusy(true);
     if (remember) localStorage.setItem('pf:deploy-config', JSON.stringify({ repo }));
     if (document.getElementById('pf-remember-token')?.checked) sessionStorage.setItem('pf:token', token);
+    const live = [];
     try {
-      const exportRes = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdown, options: { ...options, sectionOrder: sections.map((s) => s.id) }, mode: 'publish' }),
+      const publishHtml = buildHtml(markdown, { ...options, fontCss }, sections);
+      const files = exportFiles({ html: publishHtml, markdown, options }); // index.html + source + Pages workflow
+      const result = await publishToGitHub({
+        token: token.trim(),
+        repo: (repo.trim() || suggestedRepo(options, sections, markdown)),
+        private: isPrivate,
+        description: `${options.name || 'Developer'} portfolio`,
+        html: publishHtml,
+        files,
+        onStep: (step) => {
+          live.push(step);
+          setSteps([...live]);
+        },
       });
-      const { files } = await exportRes.json();
-
-      const res = await fetch('/api/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: token.trim(),
-          repo: repo.trim() || suggestedRepo(options, sections, markdown),
-          private: isPrivate,
-          description: `${options.name || 'Developer'} portfolio`,
-          html,
-          files,
-        }),
-      });
-      const data = await res.json();
-      setSteps(data.steps || []);
-      if (!res.ok) {
-        setError(data.error || `Deploy failed (${res.status})`);
-      } else {
-        setDeploy(data);
-        flash('Deployed to GitHub 🚀');
-      }
+      setDeploy(result);
+      flash('Published to GitHub 🚀');
     } catch (err) {
       setError(String(err.message || err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testToken = async () => {
+    setError('');
+    try {
+      const who = await checkToken(token.trim());
+      setTokenInfo(who);
+      flash(`Token works — @${who.login}`);
+    } catch (err) {
+      setTokenInfo(null);
+      setError(String(err.message || err));
     }
   };
 
@@ -979,13 +1019,25 @@ jobs:
           >
             Create a classic token with `repo` scope ↗
           </a>
+          <button className="btn btn-ghost" onClick={testToken} disabled={!token.trim()}>
+            Test token
+          </button>
+        </div>
+        {tokenInfo && (
+          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-300">
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500/20 text-[8px]">✓</span>
+            signed in as <span className="font-mono">@{tokenInfo.login}</span>
+          </div>
+        )}
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-[10px] text-slate-500">Stored only in this tab if you tick the box below.</span>
           <label className="flex items-center gap-1 text-[10px] text-slate-500">
             <input type="checkbox" id="pf-remember-token" className="accent-brand" /> keep for this tab
           </label>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-          The token is used server-side for one request to api.github.com and is never stored. Prefer storing it as{' '}
-          <span className="font-mono">GITHUB_TOKEN</span> in the app env and using a fine-grained token limited to the target repo.
+          This app is fully static — the token goes straight from your browser to <span className="font-mono">api.github.com</span>, never to any
+          server of ours, and is never stored. Use a fine-grained token limited to the target repo and revoke it when you're done.
         </p>
       </div>
 
@@ -1071,10 +1123,11 @@ jobs:
       </details>
 
       <details className="module">
-        <summary className="cursor-pointer text-[11px] font-semibold text-slate-300">Deploying from a fork / your own server?</summary>
+        <summary className="cursor-pointer text-[11px] font-semibold text-slate-300">How the publish works (no backend)</summary>
         <p className="mt-1 text-[10.5px] leading-relaxed text-slate-400">
-          The publish route lives at <span className="font-mono text-slate-200">app/api/deploy/route.js</span>. It needs no env vars: the token is
-          supplied per request. Host the app anywhere Node 18+ runs (<span className="font-mono">npm run build &amp;&amp; npm start</span>).
+          The Git flow (<span className="font-mono text-slate-200">lib/github.js</span>) runs entirely in your browser against the GitHub REST API:
+          ensure repo → upload blobs → build tree → commit → update <span className="font-mono text-slate-200">refs/heads/main</span> → enable Pages.
+          Re-publishing adds one fast-forward commit; nothing is ever force-pushed.
         </p>
       </details>
     </div>

@@ -1,12 +1,14 @@
 {
   "name": "portfolio-forge",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 3000",
-    "lint": "next lint"
+    "serve": "npx --yes serve@14 out -l 3000",
+    "preview": "next build && npx --yes serve@14 out -l 3000",
+    "check": "node scripts/check-export.mjs",
+    "lint": "next lint",
+    "build:docs": "node scripts/build-docs-app.mjs"
   },
   "keywords": [
     "markdown",
@@ -19,7 +21,7 @@
   ],
   "author": "",
   "license": "MIT",
-  "description": "Markdown in, hosted developer portfolio out \u2014 a Next.js studio that converts a .md r\u00e9sum\u00e9 into a themed, deployable site.",
+  "description": "Markdown in, hosted developer portfolio out — a static Next.js studio that turns a .md résumé into a themed, GitHub-Pages-ready site.",
   "dependencies": {
     "jszip": "^3.10.2",
     "next": "^14.2.15",
@@ -39,5 +41,13 @@
   "private": true,
   "engines": {
     "node": ">=18"
+  },
+  "homepage": "https://github.com/<your-user>/portfolio-forge#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<your-user>/portfolio-forge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/<your-user>/portfolio-forge/issues"
   }
 }
