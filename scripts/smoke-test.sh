@@ -45,10 +45,16 @@ process.exit(bad ? 1 : 0);
 ' && PASS=$((PASS+2)) || FAIL=$((FAIL+1))
 
 head_ "2b. Prebuilt copy in docs/app"
-for f in docs/app/index.html docs/app/preview.html docs/app/.nojekyll docs/.nojekyll index.html; do
-  if [ -f "$f" ]; then ok "$f"; else bad "$f missing — run 'npm run build:docs'"; fi
+for f in docs/app/index.html docs/app/preview.html docs/app/.nojekyll docs/.nojekyll index.html portfolio-forge.html; do
+  if [ -f "$f" ]; then ok "$f"; else bad "$f missing — run 'npm run build:docs' / 'npm run build:single'"; fi
 done
-if grep -q 'docs/app/index.html' index.html; then ok "root index.html redirects to the app"; else bad "root index.html redirect missing"; fi
+if grep -q 'portfolio-forge.html' index.html; then ok "root index.html opens the app"; else bad "root index.html redirect missing"; fi
+
+head_ "2c. Single-file build is self-contained"
+if grep -q 'id="pf-boot"' portfolio-forge.html; then ok "boot screen (logo + progress bar) present"; else bad "boot screen missing"; fi
+if grep -q 'id="pf-fonts-inline"' portfolio-forge.html; then ok "fonts inlined"; else bad "fonts not inlined"; fi
+if grep -qE '<script[^>]+src=' portfolio-forge.html; then bad "external <script src> left in single file"; else ok "no external scripts"; fi
+if grep -qE '<link[^>]+stylesheet' portfolio-forge.html; then bad "external stylesheet left in single file"; else ok "no external stylesheets"; fi
 if grep -q '_next/_next' -r docs/app/index.html docs/app/preview.html 2>/dev/null; then bad "double _next/ prefix in docs/app"; else ok "no broken asset prefixes"; fi
 
 head_ "3. Build size"

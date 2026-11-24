@@ -10,6 +10,8 @@ The generated site is a **single self-contained `index.html`**: no build step, n
 Next.js 14 (static export) · Tailwind CSS · remark / unified · GitHub REST API v3
 ```
 
+![Boot screen](docs/boot.jpg)
+
 ![Portfolio Forge studio](docs/studio.jpg)
 
 Six themes, light + dark, one Markdown file:
@@ -38,11 +40,17 @@ The zip already contains a **prebuilt copy of the app** — you do not have to r
 
 | What you want | Do this |
 | --- | --- |
-| Just use it | open **`index.html`** in the repo root (it forwards to `docs/app/`) — or open `docs/app/index.html` directly |
+| Just use it | open **`index.html`** (forwards to the single-file app) — or open **`portfolio-forge.html`** directly |
+| Put it inside another page / sandbox | embed `portfolio-forge.html` (one file, nothing external to load) |
 | Host it on GitHub Pages | **Settings → Pages → Source: Deploy from a branch → `main` → `/docs`** → live at `https://<user>.github.io/<repo>/app/` |
 | Develop it | `npm install` then `npm run dev` → http://localhost:3000 |
 
-`docs/app/` is a complete static build (relative asset paths), so it works from `file://`, from a zip, from a sub-folder, or from Pages — no rebuild required when it moves.
+Two prebuilt flavours ship in the zip:
+
+- **`portfolio-forge.html`** — the whole app in a single file (React, the Markdown pipeline, all six themes, Tailwind CSS and the three fonts are inlined, 690 KB). Runs from `file://`, a zip, an email attachment or a sandboxed iframe.
+- **`docs/app/`** — the same app built by Next.js as a normal static site (relative asset paths), which is what GitHub Pages serves from `main /docs`.
+
+Both show the same boot screen — logo, progress bar and a real percentage while fonts, your saved draft and the preview load, with a clear message if a browser blocks something.
 
 Put the Pages link in the repo: **About → Website** → `https://<user>.github.io/<repo>/app/`.
 
@@ -50,11 +58,14 @@ Put the Pages link in the repo: **About → Website** → `https://<user>.github
 
 ```bash
 npm install
-npm run build:docs     # rebuilds the app into docs/app (relative paths, portable)
+npm run build:docs     # rebuilds the Next export into docs/app (used by Pages)
+npm run build:single   # rebuilds portfolio-forge.html (single-file app)
 npm run dev            # dev server with hot reload
-npm run serve          # serve the last build at http://localhost:3000
+npm run serve          # serve the last Next export at http://localhost:3000
 npm run check          # offline parser/renderer/export tests (23 assertions)
 ```
+
+CI note: `npm run ci:build` builds both flavours; `./scripts/smoke-test.sh` verifies them.
 
 **Prefer Actions instead of the `docs` branch?** Flip **Settings → Pages → Source: GitHub Actions** and push — `.github/workflows/deploy-app.yml` builds and publishes the app at the repo root (`https://<user>.github.io/<repo>/`). Use one *or* the other, not both.
 
@@ -138,7 +149,11 @@ index.html                tiny redirect at the repo root → docs/app/
 public/fonts/*.woff2      Inter, Newsreader, JetBrains Mono (inlined on export)
 scripts/check-export.mjs  offline parser/render/export tests  → npm run check
 scripts/build-docs-app.mjs builds docs/app (portable static copy shipped in the zip)
-scripts/make-offline-html.mjs turns the export into a file:// friendly build
+scripts/make-offline-html.mjs makes the Next export file:// friendly
+scripts/build-standalone.mjs  bundles the single-file app (esbuild, no Next runtime)
+scripts/standalone/entry.js   mount point for the single-file app
+lib/boot.js                   boot screen (logo + progress bar) shared by both builds
+portfolio-forge.html          prebuilt single-file app (open this)
 scripts/smoke-test.sh     checks ./out and optionally a served instance
 .github/workflows/deploy-app.yml   builds ./out → GitHub Pages
 examples/sample-resume.md          demo input

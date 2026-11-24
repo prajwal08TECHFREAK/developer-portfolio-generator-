@@ -8,6 +8,9 @@ const basePath = process.env.BASE_PATH || '';
 // REL_ASSETS=1 rewrites asset URLs to relative ones so the export also works
 // when opened straight from disk (file://…/index.html) or in any sub-folder.
 const relAssets = process.env.REL_ASSETS === '1';
+// SINGLE_FILE=1 inlines every JS/CSS chunk into the HTML (see scripts/make-single-file.mjs),
+// so the app is one portable .html file — works from a zip, an email attachment or a sandbox.
+const singleFile = process.env.SINGLE_FILE === '1';
 
 const nextConfig = {
   output: 'export',
@@ -16,6 +19,17 @@ const nextConfig = {
   basePath,
   assetPrefix: basePath || undefined,
   images: { unoptimized: true },
+  ...(singleFile
+    ? {
+        experimental: { inlineCss: true },
+        webpack: (config) => {
+          // no code splitting: one bundle per chunk group, easy to inline
+          config.optimization.splitChunks = false;
+          config.optimization.runtimeChunk = false;
+          return config;
+        },
+      }
+    : {}),
   ...(relAssets
     ? {
         assetPrefix: '.',

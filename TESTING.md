@@ -32,7 +32,9 @@ npm run serve                       # http://localhost:3000 (serves ./out)
 ./scripts/smoke-test.sh             # checks ./out + docs/app without a server
 ```
 
-Offline check (no server at all): open `docs/app/index.html` or `index.html` straight from disk — the studio must load, render the sample preview, switch themes and download `index.html` with fonts embedded (that is the file:// path, `npm run build:offline` produces it).
+Offline check (no server at all): open `index.html` / `portfolio-forge.html` straight from disk — the boot screen must show the logo, a filling progress bar and the step labels (`Loading theme fonts… → Reading your résumé… → Restoring your draft… → Rendering the preview… → Ready`), then hand over to the studio, which must render the sample preview, switch themes and download `index.html` with fonts embedded.
+
+If a browser blocks the chunk files (sandboxed preview, strict `file://`), the boot screen must say so instead of hanging — verify by blocking `**/_next/static/chunks/**` in devtools; the message points at `portfolio-forge.html`.
 
 `scripts/smoke-test.sh` checks that:
 

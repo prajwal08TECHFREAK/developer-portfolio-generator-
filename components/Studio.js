@@ -146,10 +146,27 @@ export default function Studio({ initialSections = [] }) {
   const fileRef = useRef(null);
   const iframeRef = useRef(null);
 
+  /* ---------- boot screen progress (see app/layout.js) ---------- */
+  const boot = useRef({ started: Date.now(), last: 8 });
+  const bootStep = useCallback((pct, label) => {
+    const api = typeof window !== 'undefined' ? window.__pfBoot : null;
+    if (!api) return;
+    boot.current.last = Math.max(boot.current.last, pct);
+    api.progress(boot.current.last, label);
+  }, []);
+
   /* ---------- fonts (self-hosted, inlined on export) ---------- */
   const [fontCss, setFontCss] = useState('');
   useEffect(() => {
+    bootStep(50, 'Loading theme fonts…');
     loadStudioFonts();
+    const inlined = typeof document !== 'undefined' ? document.getElementById('pf-fonts-inline') : null;
+    if (inlined) {
+      // single-file build: the fonts are already embedded in the page
+      setFontCss(inlined.textContent || '');
+      bootStep(84, 'Reading your résumé…');
+      return () => {};
+    }
     let alive = true;
     (async () => {
       try {
@@ -167,6 +184,7 @@ export default function Studio({ initialSections = [] }) {
           })
         );
         if (alive) setFontCss(faces.filter(Boolean).join('\n'));
+        bootStep(70, 'Reading your résumé…');
       } catch {
         /* fonts are a nicety: exported sites fall back to system stacks */
       }
@@ -174,7 +192,7 @@ export default function Studio({ initialSections = [] }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [bootStep]);
 
   /* ---------- persistence ---------- */
   useEffect(() => {
@@ -187,8 +205,10 @@ export default function Studio({ initialSections = [] }) {
         if (parsed.deploy) setDeploy(parsed.deploy);
       }
     } catch {}
+    bootStep(84, 'Restoring your draft…');
     setHydrated(true);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootStep]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -200,6 +220,7 @@ export default function Studio({ initialSections = [] }) {
       } catch {}
     }, 600);
     return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markdown, options, hydrated]);
 
   /* ---------- layout: deep-link ?view=preview ---------- */
@@ -252,6 +273,7 @@ export default function Studio({ initialSections = [] }) {
   /* ---------- preview html (compiled in the browser) ---------- */
   const html = useMemo(() => {
     if (!hydrated) return '';
+    bootStep(92, 'Rendering the preview…');
     try {
       return buildHtml(markdown, options, sections);
     } catch (err) {
@@ -263,6 +285,23 @@ export default function Studio({ initialSections = [] }) {
 
   const previewSrc = useMemo(() => html || '<!doctype html><body style="background:#0b0c12"></body>', [html]);
 
+  // hand over from the boot screen as soon as the studio can be used
+  useEffect(() => {
+    if (!hydrated) return;
+    const api = typeof window !== 'undefined' ? window.__pfBoot : null;
+    if (!api) return;
+    const finish = () => {
+      bootStep(100, 'Ready');
+      api.done();
+    };
+    if (html || document.readyState === 'complete') {
+      const id = setTimeout(finish, html ? 120 : 400);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(finish, 1500); // never block on the preview
+    return () => clearTimeout(id);
+  }, [hydrated, html, bootStep]);
+
   /* ---------- actions ---------- */
   const injectDownload = () => {
     const doc = iframeRef.current?.contentDocument;
@@ -273,7 +312,13 @@ export default function Studio({ initialSections = [] }) {
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
+  // `openUrl` is injected by the standalone (single-file) build, because a
+  // relocatable file cannot link to the sibling /preview/ route.
   const openPreview = () => {
+    if (typeof window !== 'undefined' && typeof window.__pfStandaloneOpen === 'function') {
+      window.__pfStandaloneOpen(buildHtml(markdown, { ...options, fontCss }, sections));
+      return;
+    }
     sessionStorage.setItem('pf:html', html);
     window.open(`${basePath}/preview/`, '_blank');
   };
@@ -511,7 +556,7 @@ export default function Studio({ initialSections = [] }) {
                   title="Portfolio preview"
                   srcDoc={previewSrc}
                   className="h-full w-full"
-                  sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                  sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
                 />
               </div>
             ) : (
@@ -531,7 +576,8 @@ export default function Studio({ initialSections = [] }) {
 
       {toast && (
         <div
-          className={`fixed bottom-4 left-1/2 z-50 -translate-x-1/2 animate-fadein rounded-lg border px-3 py-2 text-[11px] shadow-xl ${
+          role="status"
+          className={`pointer-events-none fixed bottom-5 left-1/2 z-[60] max-w-[min(90vw,420px)] -translate-x-1/2 animate-fadein rounded-lg border px-3 py-2 text-center text-[11px] leading-relaxed shadow-2xl backdrop-blur ${
             toast.tone === 'err' ? 'border-rose-500/40 bg-rose-950/90 text-rose-200' : 'border-line bg-panel text-slate-200'
           }`}
         >
@@ -1038,7 +1084,7 @@ jobs:
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
           This app is fully static — the token goes straight from your browser to <span className="font-mono">api.github.com</span>, never to any
-          server of ours, and is never stored. Use a fine-grained token limited to the target repo and revoke it when you're done.
+          server of ours, and is never stored. Use a fine-grained token limited to the target repo and revoke it when you&apos;re done.
         </p>
       </div>
 
