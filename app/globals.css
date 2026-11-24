@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink text-slate-200 antialiased;
+  background-image: radial-gradient(900px 500px at 8% -10%, rgba(124, 108, 255, 0.18), transparent 60%),
+    radial-gradient(760px 420px at 96% 0%, rgba(45, 212, 191, 0.12), transparent 62%);
+  background-attachment: fixed;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3049 transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2b3049;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-panel/70 backdrop-blur;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-brand/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply border-transparent bg-brand text-white hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-slate-400 hover:bg-white/5 hover:text-white;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-black/30 px-2.5 py-1.5 text-xs text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-brand/70 focus:ring-2 focus:ring-brand/20;
+  }
+  .label {
+    @apply mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+  }
+  .tab {
+    @apply rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:text-white;
+  }
+  .tab-active {
+    @apply bg-white/[0.07] text-white shadow-inner;
+  }
+  .seg {
+    @apply flex overflow-hidden rounded-lg border border-line;
+  }
+  .seg > button {
+    @apply flex-1 px-2 py-1 text-[11px] text-slate-400 transition hover:bg-white/5 hover:text-white;
+  }
+  .seg > button.on {
+    @apply bg-brand/20 text-white;
+  }
+  .module {
+    @apply rounded-xl border border-line bg-black/20 p-2.5;
+  }
+}
+
+textarea.code {
+  font-variant-ligatures: none;
+  tab-size: 2;
+}
